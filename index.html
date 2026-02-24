@@ -338,6 +338,7 @@ async function loadStocks() {
     
     render();
     stats();
+    listeners();
   } catch (err) {
     console.error('Load error:', err);
     toast('Error loading stocks');
