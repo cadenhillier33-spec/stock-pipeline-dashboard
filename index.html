@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Stock Pipeline">
+  <meta name="theme-color" content="#0b1120">
+  <link rel="manifest" href="manifest.json">
+  <title>Mainsail Capital | Stock Pipeline</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root{--bg-primary:#0b1120;--bg-secondary:#151e32;--bg-tertiary:#1e293b;--accent-gold:#c9a84c;--accent-gold-light:#e8d5a3;--accent-gold-glow:rgba(201,168,76,0.15);--text-primary:#f8fafc;--text-secondary:#94a3b8;--text-muted:#64748b;--success:#22c55e;--warning:#f59e0b;--danger:#ef4444;--info:#3b82f6;--shadow-sm:0 1px 2px 0 rgba(0,0,0,0.3);--shadow:0 4px 6px -1px rgba(0,0,0,0.4);--shadow-lg:0 10px 15px -3px rgba(0,0,0,0.5);--radius-sm:6px;--radius:10px;--radius-lg:16px}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh;line-height:1.5}
+    .header{background:linear-gradient(180deg,var(--bg-secondary)0%,var(--bg-primary)100%);border-bottom:1px solid var(--accent-gold-glow);padding:24px 32px}
+    .header-content{max-width:1400px;margin:0 auto}
+    .brand{display:flex;align-items:center;gap:16px;margin-bottom:8px}
+    .logo{width:48px;height:48px;background:linear-gradient(135deg,var(--accent-gold),var(--accent-gold-light));border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:var(--bg-primary)}
+    .brand-text h1{font-family:'Playfair Display',serif;font-size:28px;font-weight:700;letter-spacing:-0.5px}
+    .brand-text p{font-size:14px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:2px}
+    .subtitle{font-family:'Playfair Display',serif;font-size:18px;color:var(--accent-gold);margin-top:4px;font-style:italic}
+    .sync-status{position:fixed;top:16px;right:16px;display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg-secondary);border:1px solid var(--bg-tertiary);border-radius:var(--radius);font-size:12px;color:var(--text-muted);z-index:100}
+    .sync-status.online{border-color:var(--success);color:var(--success)}
+    .sync-status.syncing{border-color:var(--accent-gold);color:var(--accent-gold)}
+    .sync-status.error{border-color:var(--danger);color:var(--danger)}
+    .stats-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;max-width:1400px;margin:24px auto;padding:0 32px}
+    .stat-card{background:var(--bg-secondary);border:1px solid var(--accent-gold-glow);border-radius:var(--radius);padding:16px;text-align:center;transition:all .2s}
+    .stat-card:hover{border-color:var(--accent-gold);transform:translateY(-2px)}
+    .stat-value{font-size:28px;font-weight:700;color:var(--accent-gold);font-family:'JetBrains Mono',monospace}
+    .stat-label{font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+    .tabs{max-width:1400px;margin:0 auto;padding:0 32px;display:flex;gap:8px;flex-wrap:wrap}
+    .tab{background:var(--bg-secondary);border:1px solid transparent;color:var(--text-secondary);padding:10px 20px;border-radius:var(--radius);cursor:pointer;font-size:14px;font-weight:500;transition:all .2s;display:flex;align-items:center;gap:8px}
+    .tab:hover{border-color:var(--accent-gold-glow);color:var(--text-primary)}
+    .tab.active{background:var(--accent-gold-glow);border-color:var(--accent-gold);color:var(--accent-gold)}
+    .tab-count{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--bg-tertiary);padding:2px 8px;border-radius:var(--radius-sm)}
+    .tab.active .tab-count{background:var(--accent-gold);color:var(--bg-primary)}
+    .controls{max-width:1400px;margin:24px auto;padding:0 32px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+    .search-box{flex:1;min-width:280px;position:relative}
+    .search-box input{width:100%;background:var(--bg-secondary);border:1px solid var(--bg-tertiary);color:var(--text-primary);padding:12px 16px 12px 44px;border-radius:var(--radius);font-size:14px;transition:all .2s}
+    .search-box input:focus{outline:none;border-color:var(--accent-gold)}
+    .search-box::before{content:"🔍";position:absolute;left:16px;top:50%;transform:translateY(-50%);opacity:.5}
+    .filter-group{display:flex;gap:12px;align-items:center}
+    .filter-select{background:var(--bg-secondary);border:1px solid var(--bg-tertiary);color:var(--text-primary);padding:10px 16px;border-radius:var(--radius);font-size:14px;cursor:pointer;transition:all .2s;min-width:120px}
+    .filter-select:hover,.filter-select:focus{border-color:var(--accent-gold);outline:none}
+    .btn-clear{background:transparent;border:1px solid var(--text-muted);color:var(--text-muted);padding:8px 14px;border-radius:var(--radius);font-size:13px;cursor:pointer;transition:all .2s}
+    .btn-clear:hover{border-color:var(--danger);color:var(--danger)}
+    .grid{max-width:1400px;margin:24px auto;padding:0 32px;display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:24px}
+    .card{background:var(--bg-secondary);border:1px solid var(--bg-tertiary);border-radius:var(--radius-lg);overflow:hidden;transition:all .2s}
+    .card:hover{border-color:var(--accent-gold);transform:translateY(-4px);box-shadow:var(--shadow-lg)}
+    .card.entered{border-color:var(--success);background:linear-gradient(135deg,var(--bg-secondary)0%,rgba(34,197,94,0.1)100%)}
+    .card-header{padding:20px;display:flex;justify-content:space-between;align-items:flex-start}
+    .ticker-section{display:flex;align-items:center;gap:12px}
+    .ticker{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--accent-gold)}
+    .company-name{font-size:14px;color:var(--text-secondary);max-width:200px}
+    .composite-score{width:64px;height:64px;border-radius:50%;background:var(--bg-tertiary);display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px solid var(--accent-gold)}
+    .score-value{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--accent-gold)}
+    .score-label{font-size:9px;color:var(--text-muted);text-transform:uppercase}
+    .card-body{padding:0 20px 20px}
+    .metrics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+    .metric{background:var(--bg-tertiary);padding:12px;border-radius:var(--radius);text-align:center}
+    .metric-value{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;color:var(--text-primary)}
+    .metric-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;margin-top:4px}
+    .metric.positive .metric-value{color:var(--success)}
+    .metric.negative .metric-value{color:var(--danger)}
+    .score-breakdown{background:var(--bg-tertiary);padding:16px;border-radius:var(--radius);margin-bottom:16px}
+    .score-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px}
+    .score-bar{flex:1;height:6px;background:var(--bg-secondary);border-radius:3px;margin:0 12px;overflow:hidden}
+    .score-fill{height:100%;background:var(--accent-gold);border-radius:3px}
+    .position-info{background:var(--bg-tertiary);padding:16px;border-radius:var(--radius);margin-bottom:16px}
+    .position-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px}
+    .position-row.total{border-top:1px solid var(--bg-secondary);margin-top:8px;padding-top:8px;font-weight:600}
+    .pnl-positive{color:var(--success)}
+    .pnl-negative{color:var(--danger)}
+    .notes-section{margin-top:16px}
+    .notes-text{font-size:13px;color:var(--text-secondary);line-height:1.6;padding:12px;background:var(--bg-tertiary);border-radius:var(--radius);min-height:60px}
+    .card-actions{display:flex;gap:8px;padding:0 20px 20px}
+    .action-btn{flex:1;padding:10px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;border:none}
+    .btn-rank{background:var(--bg-tertiary);color:var(--text-secondary)}
+    .btn-watch{background:rgba(59,130,246,0.15);color:#60a5fa}
+    .btn-analyze{background:rgba(245,158,11,0.15);color:#fbbf24}
+    .btn-enter{background:var(--success);color:#fff}
+    .btn-exit{background:var(--danger);color:#fff}
+    .empty-state{text-align:center;padding:60px 20px;grid-column:1/-1}
+    .empty-state h3{font-family:'Playfair Display',serif;font-size:24px;color:var(--text-primary);margin-bottom:8px}
+    .empty-state p{color:var(--text-secondary)}
+    .results-count{max-width:1400px;margin:0 auto;padding:0 32px 16px;font-size:14px;color:var(--text-secondary)}
+    .toast-container{position:fixed;bottom:24px;right:24px;z-index:2000;display:flex;flex-direction:column;gap:8px}
+    .toast{background:var(--bg-secondary);border:1px solid var(--accent-gold);color:var(--text-primary);padding:16px 24px;border-radius:var(--radius);box-shadow:var(--shadow-lg);font-size:14px;font-weight:500;animation:slideIn .3s ease}
+    @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+    .loading-overlay{position:fixed;inset:0;background:var(--bg-primary);display:flex;align-items:center;justify-content:center;z-index:3000}
+    .loading-spinner{width:48px;height:48px;border:3px solid var(--bg-tertiary);border-top-color:var(--accent-gold);border-radius:50%;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .sector-badge{display:inline-block;padding:4px 10px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;background:var(--bg-tertiary);color:var(--text-secondary)}
+    @media(max-width:768px){.grid{grid-template-columns:1fr;padding:0 16px}.header{padding:16px}.stats-bar,.tabs,.controls{padding:0 16px}.stats-bar{grid-template-columns:repeat(2,1fr)}.metrics-grid{grid-template-columns:repeat(2,1fr)}}
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"></div></div>
+  
+  <div class="sync-status" id="syncStatus">Connecting...</div>
+  
+  <header class="header">
+    <div class="header-content">
+      <div class="brand">
+        <div class="logo">M</div>
+        <div class="brand-text">
+          <h1>Mainsail Capital</h1>
+          <p>Stock Pipeline</p>
+        </div>
+      </div>
+      <p class="subtitle">Intelligent stock ranking and position management</p>
+    </div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total Stocks</div></div>
+    <div class="stat-card"><div class="stat-value" id="statAvgScore">0</div><div class="stat-label">Avg Composite</div></div>
+    <div class="stat-card"><div class="stat-value" id="statWatchlist">0</div><div class="stat-label">Watchlist</div></div>
+    <div class="stat-card"><div class="stat-value" id="statEntered">0</div><div class="stat-label">Active Positions</div></div>
+    <div class="stat-card"><div class="stat-value" id="statWinRate">0%</div><div class="stat-label">Win Rate</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="ranked">📊 Ranked<span class="tab-count" id="tabRanked">0</span></button>
+    <button class="tab" data-tab="watchlist">👁️ Watchlist<span class="tab-count" id="tabWatchlist">0</span></button>
+    <button class="tab" data-tab="entered">💼 Active<span class="tab-count" id="tabEntered">0</span></button>
+    <button class="tab" data-tab="exited">📈 Exited<span class="tab-count" id="tabExited">0</span></button>
+    <button class="tab" data-tab="all">📋 All<span class="tab-count" id="tabAll">0</span></button>
+  </div>
+
+  <div class="controls">
+    <div class="search-box"><input type="text" id="searchInput" placeholder="Search ticker or company..."></div>
+    <div class="filter-group">
+      <select id="sectorFilter" class="filter-select">
+        <option value="">Sector</option>
+        <option value="Technology">Technology</option>
+        <option value="Healthcare">Healthcare</option>
+        <option value="Financials">Financials</option>
+        <option value="Consumer">Consumer</option>
+        <option value="Industrials">Industrials</option>
+      </select>
+      <select id="scoreFilter" class="filter-select">
+        <option value="">Score</option>
+        <option value="90+">90+ (Strong)</option>
+        <option value="80-89">80-89 (Good)</option>
+        <option value="70-79">70-79 (Fair)</option>
+        <option value="<70">&lt;70 (Weak)</option>
+      </select>
+      <button class="btn-clear" id="clearFilters" style="display:none">Clear</button>
+    </div>
+  </div>
+
+  <div class="results-count" id="resultsCount"></div>
+  <div class="grid" id="cardsGrid"></div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+const SUPABASE_URL = 'https://slmdfgunkmvbqbzjfpdz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsbWRmZ3Vua212YnFiempmcGR6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTEwNjA0NSwiZXhwIjoyMDg2NjgyMDQ1fQ.K5hNuuY009fIMjC2AiRM6AqeUZVQWFWX_Bbd1lx43w4';
+
+let supabase, stocks = [], tab = 'ranked', search = '', filterSector = '', filterScore = '';
+
+async function init() {
+  updateSyncStatus('syncing', 'Connecting to database...');
+  
+  try {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const { data, error } = await supabase.from('stocks').select('count');
+    if (error) throw error;
+    
+    updateSyncStatus('online', 'Connected');
+    await loadStocks();
+    
+    supabase.channel('stocks-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stocks' }, () => loadStocks())
+      .subscribe();
+      
+  } catch (err) {
+    console.error('Init error:', err);
+    updateSyncStatus('error', 'Database error');
+    showError('Failed to connect. Run SQL setup first.');
+  }
+  
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+async function loadStocks() {
+  try {
+    const { data, error } = await supabase.from('stocks').select('*').order('composite_score', { ascending: false });
+    if (error) throw error;
+    
+    stocks = data || [];
+    render();
+    stats();
+    listeners();
+  } catch (err) {
+    console.error('Load error:', err);
+    toast('Error loading stocks');
+  }
+}
+
+function updateSyncStatus(status, text) {
+  const el = document.getElementById('syncStatus');
+  el.className = 'sync-status ' + status;
+  el.textContent = text;
+}
+
+function showError(msg) {
+  document.getElementById('cardsGrid').innerHTML = 
+    '<div class="empty-state"><h3>⚠️ Setup Required</h3><p>' + msg + '</p></div>';
+}
+
+function $(s) { return document.getElementById(s); }
+function fmt(n) { return n ? '$' + n.toLocaleString() : ''; }
+
+function get() {
+  let f = stocks;
+  if (tab !== 'all') f = f.filter(s => s.status === tab);
+  
+  if (search) {
+    const q = search.toLowerCase();
+    f = f.filter(s => (s.ticker || '').toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q));
+  }
+  
+  if (filterSector) f = f.filter(s => s.sector === filterSector);
+  
+  if (filterScore) {
+    f = f.filter(s => {
+      const score = s.composite_score || 0;
+      switch(filterScore) {
+        case '90+': return score >= 90;
+        case '80-89': return score >= 80 && score < 90;
+        case '70-79': return score >= 70 && score < 80;
+        case '<70': return score < 70;
+        default: return true;
+      }
+    });
+  }
+  
+  return f;
+}
+
+function stats() {
+  const total = stocks.length;
+  const avgScore = total ? Math.round(stocks.reduce((a, s) => a + (s.composite_score || 0), 0) / total) : 0;
+  const watchlist = stocks.filter(s => s.status === 'watchlist').length;
+  const entered = stocks.filter(s => s.status === 'entered').length;
+  const exited = stocks.filter(s => s.status === 'exited');
+  const winRate = exited.length ? Math.round(exited.filter(s => (s.pnl_pct || 0) > 0).length / exited.length * 100) : 0;
+  
+  $('statTotal').textContent = total;
+  $('statAvgScore').textContent = avgScore;
+  $('statWatchlist').textContent = watchlist;
+  $('statEntered').textContent = entered;
+  $('statWinRate').textContent = winRate + '%';
+  
+  $('tabRanked').textContent = stocks.filter(s => s.status === 'ranked').length;
+  $('tabWatchlist').textContent = watchlist;
+  $('tabEntered').textContent = entered;
+  $('tabExited').textContent = exited.length;
+  $('tabAll').textContent = total;
+}
+
+function render() {
+  const f = get(), g = $('cardsGrid');
+  if (!f.length) {
+    g.innerHTML = '<div class="empty-state"><h3>No stocks</h3><p>' + (search ? 'No matches' : 'No stocks here') + '</p></div>';
+    $('resultsCount').textContent = '';
+    return;
+  }
+  $('resultsCount').textContent = search ? `Found ${f.length}` : `Showing ${f.length} stocks`;
+  g.innerHTML = f.map(s => card(s)).join('');
+}
+
+function card(s) {
+  const isEntered = s.status === 'entered';
+  const isExited = s.status === 'exited';
+  
+  let actions = '';
+  if (s.status === 'ranked') {
+    actions = '<button class="action-btn btn-watch" onclick="updateStatus(\'' + s.id + '\', \'watchlist\')">Watch</button>';
+  } else if (s.status === 'watchlist') {
+    actions = '<button class="action-btn btn-enter" onclick="enterPosition(\'' + s.id + '\')">Enter</button><button class="action-btn btn-rank" onclick="updateStatus(\'' + s.id + '\', \'ranked\')">Back</button>';
+  } else if (s.status === 'entered') {
+    actions = '<button class="action-btn btn-exit" onclick="exitPosition(\'' + s.id + '\')">Exit</button>';
+  } else {
+    actions = '<button class="action-btn btn-rank" onclick="updateStatus(\'' + s.id + '\', \'ranked\')">Reset</button>';
+  }
+  
+  let positionSection = '';
+  if (isEntered || isExited) {
+    const pnl = s.pnl_pct || 0;
+    const pnlClass = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+    positionSection = '<div class="position-info"><div class="position-row"><span>Entry:</span><span>' + (s.entry_price ? '$' + s.entry_price : '-') + '</span></div><div class="position-row"><span>Target:</span><span>' + (s.target_price ? '$' + s.target_price : '-') + '</span></div><div class="position-row"><span>Stop:</span><span>' + (s.stop_loss ? '$' + s.stop_loss : '-') + '</span></div>' + (isExited ? '<div class="position-row total"><span>Exit Price:</span><span>$' + s.exit_price + '</span></div><div class="position-row total"><span>P&L:</span><span class="' + pnlClass + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%</span></div>' : '') + '</div>';
+  }
+  
+  return '<div class="card ' + (isEntered ? 'entered' : '') + '"><div class="card-header"><div class="ticker-section"><div><div class="ticker">' + s.ticker + '</div><div class="company-name">' + s.name + '</div><div style="margin-top:8px"><span class="sector-badge">' + (s.sector || 'Unknown') + '</span></div></div></div><div class="composite-score"><div class="score-value">' + (s.composite_score || 0) + '</div><div class="score-label">Score</div></div></div><div class="card-body"><div class="metrics-grid"><div class="metric"><div class="metric-value">' + (s.price ? '$' + s.price : '-') + '</div><div class="metric-label">Price</div></div><div class="metric"><div class="metric-value" style="color:' + (s.rs_rating >= 90 ? '#22c55e' : s.rs_rating >= 80 ? '#fbbf24' : '#94a3b8') + '">' + (s.rs_rating || 0) + '</div><div class="metric-label">RS Rating</div></div><div class="metric"><div class="metric-value" style="color:' + (s.eps_rating >= 90 ? '#22c55e' : s.eps_rating >= 80 ? '#fbbf24' : '#94a3b8') + '">' + (s.eps_rating || 0) + '</div><div class="metric-label">EPS Rating</div></div></div><div class="score-breakdown"><div class="score-row"><span>IBD</span><div class="score-bar"><div class="score-fill" style="width:' + (s.ibd_score || 0) + '%"></div></div><span>' + (s.ibd_score || 0) + '</span></div><div class="score-row"><span>FMP</span><div class="score-bar"><div class="score-fill" style="width:' + (s.fmp_score || 0) + '%"></div></div><span>' + (s.fmp_score || 0) + '</span></div><div class="score-row"><span>Finviz</span><div class="score-bar"><div class="score-fill" style="width:' + (s.finviz_score || 0) + '%"></div></div><span>' + (s.finviz_score || 0) + '</span></div><div class="score-row"><span>Consensus</span><div class="score-bar"><div class="score-fill" style="width:' + (s.consensus_score || 0) + '%"></div></div><span>' + (s.consensus_score || 0) + '</span></div></div>' + positionSection + (s.notes ? '<div class="notes-section"><div class="notes-text">' + s.notes + '</div></div>' : '') + '</div><div class="card-actions">' + actions + '</div></div>';
+}
+
+async function updateStatus(id, status) {
+  updateSyncStatus('syncing', 'Saving...');
+  
+  try {
+    const { error } = await supabase.from('stocks').update({ status, last_updated: new Date().toISOString() }).eq('id', id);
+    if (error) throw error;
+    
+    updateSyncStatus('online', 'Saved');
+    toast('Status updated');
+    await loadStocks();
+  } catch (err) {
+    console.error('Update error:', err);
+    updateSyncStatus('error', 'Save failed');
+    toast('Error saving');
+  }
+}
+
+async function enterPosition(id) {
+  const entryPrice = prompt('Enter Entry Price:');
+  if (!entryPrice) return;
+  
+  const targetPrice = prompt('Enter Target Price:');
+  if (!targetPrice) return;
+  
+  const stopLoss = prompt('Enter Stop Loss:');
+  if (!stopLoss) return;
+  
+  updateSyncStatus('syncing', 'Saving position...');
+  
+  try {
+    const { error } = await supabase.from('stocks').update({
+      status: 'entered',
+      entry_price: parseFloat(entryPrice),
+      target_price: parseFloat(targetPrice),
+      stop_loss: parseFloat(stopLoss),
+      entry_date: new Date().toISOString().split('T')[0],
+      last_updated: new Date().toISOString()
+    }).eq('id', id);
+    
+    if (error) throw error;
+    
+    updateSyncStatus('online', 'Position entered');
+    toast('Position entered');
+    await loadStocks();
+  } catch (err) {
+    console.error('Enter error:', err);
+    updateSyncStatus('error', 'Save failed');
+    toast('Error entering position');
+  }
+}
+
+async function exitPosition(id) {
+  const exitPrice = prompt('Enter Exit Price:');
+  if (!exitPrice) return;
+  
+  const stock = stocks.find(s => s.id === id);
+  if (!stock || !stock.entry_price) {
+    toast('No entry price found');
+    return;
+  }
+  
+  const pnl = ((parseFloat(exitPrice) - stock.entry_price) / stock.entry_price * 100);
+  
+  updateSyncStatus('syncing', 'Recording exit...');
+  
+  try {
+    const { error } = await supabase.from('stocks').update({
+      status: 'exited',
+      exit_price: parseFloat(exitPrice),
+      exit_date: new Date().toISOString().split('T')[0],
+      pnl_pct: pnl,
+      last_updated: new Date().toISOString()
+    }).eq('id', id);
+    
+    if (error) throw error;
+    
+    updateSyncStatus('online', 'Position exited');
+    toast('Position exited (' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%)');
+    await loadStocks();
+  } catch (err) {
+    console.error('Exit error:', err);
+    updateSyncStatus('error', 'Save failed');
+    toast('Error exiting position');
+  }
+}
+
+function toast(m) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = m;
+  $('toastContainer').appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+function listeners() {
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    tab = b.dataset.tab;
+    render();
+  });
+  
+  $('searchInput').oninput = e => { search = e.target.value; render(); };
+  
+  $('sectorFilter').onchange = e => {
+    filterSector = e.target.value;
+    $('clearFilters').style.display = filterSector || filterScore ? 'block' : 'none';
+    render();
+  };
+  
+  $('scoreFilter').onchange = e => {
+    filterScore = e.target.value;
+    $('clearFilters').style.display = filterSector || filterScore ? 'block' : 'none';
+    render();
+  };
+  
+  $('clearFilters').onclick = () => {
+    filterSector = '';
+    filterScore = '';
+    $('sectorFilter').value = '';
+    $('scoreFilter').value = '';
+    $('clearFilters').style.display = 'none';
+    render();
+  };
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js')
+    .then(reg => console.log('SW registered:', reg))
+    .catch(err => console.log('SW registration failed:', err));
+}
+  </script>
+</body>
+</html>
