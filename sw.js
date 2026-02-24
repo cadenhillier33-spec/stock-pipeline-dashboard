@@ -1,24 +1,23 @@
-const CACHE_NAME = 'mainsail-stocks-v1';
-const urlsToCache = [
-  '/stock-pipeline-dashboard/',
-  '/stock-pipeline-dashboard/index.html'
-];
+const CACHE_NAME = 'mainsail-stocks-v2';
 
+// Clear old caches on install
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.filter(name => name !== CACHE_NAME).map(name => caches.delete(name))
+      );
+    })
   );
   self.skipWaiting();
 });
 
+// Network-first strategy - always try network first, fall back to cache
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) return response;
-        return fetch(event.request);
-      })
+    fetch(event.request).catch(() => {
+      return caches.match(event.request);
+    })
   );
 });
 
