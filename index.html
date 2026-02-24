@@ -95,7 +95,33 @@
     .loading-spinner{width:48px;height:48px;border:3px solid var(--bg-tertiary);border-top-color:var(--accent-gold);border-radius:50%;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     .sector-badge{display:inline-block;padding:4px 10px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;background:var(--bg-tertiary);color:var(--text-secondary)}
-    @media(max-width:768px){.grid{grid-template-columns:1fr;padding:0 16px}.header{padding:16px}.stats-bar,.tabs,.controls{padding:0 16px}.stats-bar{grid-template-columns:repeat(2,1fr)}.metrics-grid{grid-template-columns:repeat(2,1fr)}}
+    .formula-container{max-width:900px;margin:24px auto;padding:0 32px}
+    .formula-card{background:var(--bg-secondary);border:2px solid var(--accent-gold);border-radius:var(--radius-lg);padding:32px}
+    .formula-card h2{font-family:'Playfair Display',serif;font-size:32px;color:var(--accent-gold);margin-bottom:8px}
+    .formula-subtitle{color:var(--text-secondary);font-size:14px;margin-bottom:24px}
+    .formula-section{margin-bottom:32px}
+    .formula-section h3{font-size:18px;color:var(--text-primary);margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--bg-tertiary)}
+    .formula-box{background:var(--bg-tertiary);padding:16px 20px;border-radius:var(--radius);margin-bottom:16px}
+    .formula-box code{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--accent-gold-light)}
+    .weights{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .weight-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-tertiary);border-radius:var(--radius)}
+    .weight-val{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent-gold);min-width:50px}
+    .ibd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+    .ibd-item{background:var(--bg-tertiary);padding:16px;border-radius:var(--radius);border-left:3px solid var(--accent-gold)}
+    .ibd-name{display:block;font-weight:600;color:var(--text-primary);margin-bottom:4px}
+    .ibd-weight{display:block;font-size:12px;color:var(--accent-gold);margin-bottom:4px}
+    .ibd-desc{display:block;font-size:12px;color:var(--text-muted)}
+    .score-legend{display:flex;flex-direction:column;gap:12px}
+    .legend-item{display:flex;align-items:center;gap:16px;padding:12px 16px;background:var(--bg-tertiary);border-radius:var(--radius)}
+    .legend-score{font-family:'JetBrains Mono',monospace;font-weight:700;padding:4px 12px;border-radius:var(--radius-sm);min-width:70px;text-align:center}
+    .legend-score.strong{background:rgba(34,197,94,0.2);color:#22c55e}
+    .legend-score.good{background:rgba(201,168,76,0.2);color:var(--accent-gold)}
+    .legend-score.fair{background:rgba(59,130,246,0.2);color:#60a5fa}
+    .legend-score.weak{background:rgba(239,68,68,0.2);color:#ef4444}
+    .formula-footer{text-align:center;padding-top:24px;border-top:1px solid var(--bg-tertiary);margin-top:32px}
+    .formula-footer p{color:var(--text-muted);font-size:13px}
+    .formula-date{font-size:12px;margin-top:8px}
+    @media(max-width:768px){.grid{grid-template-columns:1fr;padding:0 16px}.header{padding:16px}.stats-bar,.tabs,.controls,.formula-container{padding:0 16px}.stats-bar{grid-template-columns:repeat(2,1fr)}.metrics-grid{grid-template-columns:repeat(2,1fr)}.formula-card{padding:20px}.weights{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -130,6 +156,7 @@
     <button class="tab" data-tab="entered">💼 Active<span class="tab-count" id="tabEntered">0</span></button>
     <button class="tab" data-tab="exited">📈 Exited<span class="tab-count" id="tabExited">0</span></button>
     <button class="tab" data-tab="all">📋 All<span class="tab-count" id="tabAll">0</span></button>
+    <button class="tab" data-tab="formula">🔐 Formula</button>
   </div>
 
   <div class="controls">
@@ -156,6 +183,77 @@
 
   <div class="results-count" id="resultsCount"></div>
   <div class="grid" id="cardsGrid"></div>
+
+  <div class="formula-container" id="formulaView" style="display:none">
+    <div class="formula-card">
+      <h2>🎯 The Secret Formula</h2>
+      <p class="formula-subtitle">Mainsail Capital Stock Ranking Methodology</p>
+      
+      <div class="formula-section">
+        <h3>Composite Score Formula</h3>
+        <div class="formula-box">
+          <code>Composite = (FMP × 0.30) + (IBD × 0.30) + (Finviz × 0.20) + (Consensus × 0.20)</code>
+        </div>
+        <div class="weights">
+          <div class="weight-item"><span class="weight-val">30%</span><span>FMP (Analyst Estimates)</span></div>
+          <div class="weight-item"><span class="weight-val">30%</span><span>IBD Engine (Technical)</span></div>
+          <div class="weight-item"><span class="weight-val">20%</span><span>Finviz (Performance)</span></div>
+          <div class="weight-item"><span class="weight-val">20%</span><span>Analyst Consensus</span></div>
+        </div>
+      </div>
+
+      <div class="formula-section">
+        <h3>IBD Engine Components</h3>
+        <div class="ibd-grid">
+          <div class="ibd-item">
+            <span class="ibd-name">EPS Rating</span>
+            <span class="ibd-weight">2× weight</span>
+            <span class="ibd-desc">YoY earnings growth</span>
+          </div>
+          <div class="ibd-item">
+            <span class="ibd-name">RS Rating</span>
+            <span class="ibd-weight">2× weight</span>
+            <span class="ibd-desc">Price performance vs market</span>
+          </div>
+          <div class="ibd-item">
+            <span class="ibd-name">SMR Rating</span>
+            <span class="ibd-weight">1× weight</span>
+            <span class="ibd-desc">Sales, Margins, ROE</span>
+          </div>
+          <div class="ibd-item">
+            <span class="ibd-name">Acc/Dist</span>
+            <span class="ibd-weight">1× weight</span>
+            <span class="ibd-desc">Volume on up vs down days</span>
+          </div>
+          <div class="ibd-item">
+            <span class="ibd-name">Industry Rank</span>
+            <span class="ibd-weight">1× weight</span>
+            <span class="ibd-desc">Sector performance</span>
+          </div>
+          <div class="ibd-item">
+            <span class="ibd-name">% Off High</span>
+            <span class="ibd-weight">1× weight</span>
+            <span class="ibd-desc">Proximity to 52-week high</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="formula-section">
+        <h3>Score Interpretation</h3>
+        <div class="score-legend">
+          <div class="legend-item"><span class="legend-score strong">90-100</span><span>Strong Buy — Top tier, immediate attention</span></div>
+          <div class="legend-item"><span class="legend-score good">80-89</span><span>Good — Solid fundamentals, monitor closely</span></div>
+          <div class="legend-item"><span class="legend-score fair">70-79</span><span>Fair — Watchlist candidates</span></div>
+          <div class="legend-item"><span class="legend-score weak">&lt;70</span><span>Weak — Skip or wait for improvement</span></div>
+        </div>
+      </div>
+
+      <div class="formula-footer">
+        <p>🔒 <strong>For Mainsail Capital internal use only</strong></p>
+        <p class="formula-date">Last updated: February 2026</p>
+      </div>
+    </div>
+  </div>
 
   <div class="toast-container" id="toastContainer"></div>
 
@@ -401,7 +499,19 @@ function listeners() {
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
     b.classList.add('active');
     tab = b.dataset.tab;
-    render();
+    
+    if (tab === 'formula') {
+      $('cardsGrid').style.display = 'none';
+      $('resultsCount').style.display = 'none';
+      $('formulaView').style.display = 'block';
+      document.querySelector('.controls').style.display = 'none';
+    } else {
+      $('cardsGrid').style.display = 'grid';
+      $('resultsCount').style.display = 'block';
+      $('formulaView').style.display = 'none';
+      document.querySelector('.controls').style.display = 'flex';
+      render();
+    }
   });
   
   $('searchInput').oninput = e => { search = e.target.value; render(); };
