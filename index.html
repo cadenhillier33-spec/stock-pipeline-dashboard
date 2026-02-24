@@ -121,7 +121,24 @@
     .formula-footer{text-align:center;padding-top:24px;border-top:1px solid var(--bg-tertiary);margin-top:32px}
     .formula-footer p{color:var(--text-muted);font-size:13px}
     .formula-date{font-size:12px;margin-top:8px}
-    @media(max-width:768px){.grid{grid-template-columns:1fr;padding:0 16px}.header{padding:16px}.stats-bar,.tabs,.controls,.formula-container{padding:0 16px}.stats-bar{grid-template-columns:repeat(2,1fr)}.metrics-grid{grid-template-columns:repeat(2,1fr)}.formula-card{padding:20px}.weights{grid-template-columns:1fr}}
+    .top40-toggle{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--bg-secondary);border:1px solid var(--accent-gold);border-radius:var(--radius);cursor:pointer;transition:all .2s;color:var(--accent-gold);font-size:14px;font-weight:600}
+    .top40-toggle:hover{background:var(--accent-gold-glow)}
+    .top40-toggle.active{background:var(--accent-gold);color:var(--bg-primary)}
+    .insights-bar{max-width:1400px;margin:0 auto 16px;padding:0 32px;display:flex;gap:16px;flex-wrap:wrap}
+    .insight-item{background:var(--bg-secondary);border:1px solid var(--bg-tertiary);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:13px}
+    .insight-label{color:var(--text-muted)}
+    .insight-value{font-weight:600;color:var(--text-primary)}
+    .insight-value.up{color:var(--success)}
+    .insight-value.down{color:var(--danger)}
+    .rank-change{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600}
+    .rank-change.up{color:var(--success)}
+    .rank-change.down{color:var(--danger)}
+    .rank-change.neutral{color:var(--text-muted)}
+    .score-delta{font-size:11px;padding:2px 6px;border-radius:var(--radius-sm);font-weight:600}
+    .score-delta.positive{background:rgba(34,197,94,0.2);color:#22c55e}
+    .score-delta.negative{background:rgba(239,68,68,0.2);color:#ef4444}
+    .new-badge{font-size:10px;background:var(--accent-gold);color:var(--bg-primary);padding:2px 6px;border-radius:var(--radius-sm);font-weight:700;text-transform:uppercase}
+    @media(max-width:768px){.grid{grid-template-columns:1fr;padding:0 16px}.header{padding:16px}.stats-bar,.tabs,.controls,.formula-container,.insights-bar{padding:0 16px}.stats-bar{grid-template-columns:repeat(2,1fr)}.metrics-grid{grid-template-columns:repeat(2,1fr)}.formula-card{padding:20px}.weights{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -161,6 +178,7 @@
 
   <div class="controls">
     <div class="search-box"><input type="text" id="searchInput" placeholder="Search ticker or company..."></div>
+    <button class="top40-toggle" id="top40Toggle">⭐ Top 40 Only</button>
     <div class="filter-group">
       <select id="sectorFilter" class="filter-select">
         <option value="">Sector</option>
@@ -181,6 +199,12 @@
     </div>
   </div>
 
+  <div class="insights-bar" id="insightsBar" style="display:none">
+    <div class="insight-item"><span class="insight-label">New This Week:</span><span class="insight-value up" id="newEntrants">0</span></div>
+    <div class="insight-item"><span class="insight-label">Dropped Out:</span><span class="insight-value down" id="droppedOut">0</span></div>
+    <div class="insight-item"><span class="insight-label">Avg Score Δ:</span><span class="insight-value" id="avgDelta">0</span></div>
+    <div class="insight-item"><span class="insight-label">Biggest Mover:</span><span class="insight-value" id="biggestMover">-</span></div>
+  </div>
   <div class="results-count" id="resultsCount"></div>
   <div class="grid" id="cardsGrid"></div>
 
@@ -261,7 +285,7 @@
 const SUPABASE_URL = 'https://slmdfgunkmvbqbzjfpdz.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsbWRmZ3Vua212YnFiempmcGR6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTEwNjA0NSwiZXhwIjoyMDg2NjgyMDQ1fQ.K5hNuuY009fIMjC2AiRM6AqeUZVQWFWX_Bbd1lx43w4';
 
-let supabase, stocks = [], tab = 'ranked', search = '', filterSector = '', filterScore = '';
+let supabase, stocks = [], lastWeekStocks = [], tab = 'ranked', search = '', filterSector = '', filterScore = '', top40Only = false;
 
 async function init() {
   updateSyncStatus('syncing', 'Connecting to database...');
@@ -293,9 +317,27 @@ async function loadStocks() {
     if (error) throw error;
     
     stocks = data || [];
+    
+    // Load last week's data for comparison
+    try {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      const { data: snapshotData } = await supabase
+        .from('stock_snapshots')
+        .select('*')
+        .gte('week_of', oneWeekAgo.toISOString().split('T')[0])
+        .order('week_of', { ascending: false });
+      
+      if (snapshotData && snapshotData.length > 0) {
+        lastWeekStocks = snapshotData;
+        calculateInsights();
+      }
+    } catch (e) {
+      console.log('No historical data yet');
+    }
+    
     render();
     stats();
-    listeners();
   } catch (err) {
     console.error('Load error:', err);
     toast('Error loading stocks');
@@ -320,6 +362,11 @@ function get() {
   let f = stocks;
   if (tab !== 'all') f = f.filter(s => s.status === tab);
   
+  // Top 40 filter
+  if (top40Only && tab === 'ranked') {
+    f = f.slice(0, 40);
+  }
+  
   if (search) {
     const q = search.toLowerCase();
     f = f.filter(s => (s.ticker || '').toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q));
@@ -341,6 +388,49 @@ function get() {
   }
   
   return f;
+}
+
+function calculateInsights() {
+  if (!lastWeekStocks.length) return;
+  
+  const currentTop40 = stocks.slice(0, 40).map(s => s.ticker);
+  const lastWeekTop40 = lastWeekStocks.filter(s => s.rank <= 40).map(s => s.ticker);
+  
+  const newEntrants = currentTop40.filter(t => !lastWeekTop40.includes(t));
+  const droppedOut = lastWeekTop40.filter(t => !currentTop40.includes(t));
+  
+  // Calculate average score delta
+  let totalDelta = 0;
+  let deltaCount = 0;
+  let biggestMover = { ticker: '-', change: 0 };
+  
+  stocks.forEach((stock, idx) => {
+    const lastWeek = lastWeekStocks.find(s => s.ticker === stock.ticker);
+    if (lastWeek) {
+      const scoreDelta = (stock.composite_score || 0) - (lastWeek.composite_score || 0);
+      totalDelta += scoreDelta;
+      deltaCount++;
+      
+      const rankDelta = lastWeek.rank - (idx + 1);
+      if (Math.abs(rankDelta) > Math.abs(biggestMover.change)) {
+        biggestMover = { ticker: stock.ticker, change: rankDelta };
+      }
+    }
+  });
+  
+  const avgDelta = deltaCount ? (totalDelta / deltaCount).toFixed(1) : 0;
+  const avgDeltaClass = avgDelta > 0 ? 'up' : avgDelta < 0 ? 'down' : '';
+  
+  $('newEntrants').textContent = `+${newEntrants.length}`;
+  $('droppedOut').textContent = `-${droppedOut.length}`;
+  $('avgDelta').textContent = `${avgDelta > 0 ? '+' : ''}${avgDelta}`;
+  $('avgDelta').className = `insight-value ${avgDeltaClass}`;
+  $('biggestMover').textContent = biggestMover.change !== 0 ? 
+    `${biggestMover.ticker} ${biggestMover.change > 0 ? '↑' : '↓'}${Math.abs(biggestMover.change)}` : '-';
+  
+  if (newEntrants.length || droppedOut.length) {
+    $('insightsBar').style.display = 'flex';
+  }
 }
 
 function stats() {
@@ -371,13 +461,45 @@ function render() {
     $('resultsCount').textContent = '';
     return;
   }
-  $('resultsCount').textContent = search ? `Found ${f.length}` : `Showing ${f.length} stocks`;
-  g.innerHTML = f.map(s => card(s)).join('');
+  
+  const displayText = top40Only ? 'Showing Top 40' : `Showing ${f.length} stocks`;
+  $('resultsCount').textContent = search ? `Found ${f.length}` : displayText;
+  g.innerHTML = f.map((s, i) => card(s, i)).join('');
 }
 
-function card(s) {
+function card(s, index) {
   const isEntered = s.status === 'entered';
   const isExited = s.status === 'exited';
+  const currentRank = index + 1;
+  
+  // Calculate week-over-week changes
+  let rankChangeHtml = '';
+  let scoreDeltaHtml = '';
+  let isNew = false;
+  
+  if (lastWeekStocks.length > 0) {
+    const lastWeek = lastWeekStocks.find(lw => lw.ticker === s.ticker);
+    if (lastWeek) {
+      const rankDelta = lastWeek.rank - currentRank;
+      const scoreDelta = (s.composite_score || 0) - (lastWeek.composite_score || 0);
+      
+      if (rankDelta > 0) {
+        rankChangeHtml = '<span class="rank-change up">↑' + rankDelta + '</span>';
+      } else if (rankDelta < 0) {
+        rankChangeHtml = '<span class="rank-change down">↓' + Math.abs(rankDelta) + '</span>';
+      } else {
+        rankChangeHtml = '<span class="rank-change neutral">-</span>';
+      }
+      
+      if (scoreDelta !== 0) {
+        const deltaClass = scoreDelta > 0 ? 'positive' : 'negative';
+        scoreDeltaHtml = '<span class="score-delta ' + deltaClass + '">' + (scoreDelta > 0 ? '+' : '') + scoreDelta + '</span>';
+      }
+    } else {
+      isNew = true;
+      rankChangeHtml = '<span class="new-badge">New</span>';
+    }
+  }
   
   let actions = '';
   if (s.status === 'ranked') {
@@ -397,7 +519,7 @@ function card(s) {
     positionSection = '<div class="position-info"><div class="position-row"><span>Entry:</span><span>' + (s.entry_price ? '$' + s.entry_price : '-') + '</span></div><div class="position-row"><span>Target:</span><span>' + (s.target_price ? '$' + s.target_price : '-') + '</span></div><div class="position-row"><span>Stop:</span><span>' + (s.stop_loss ? '$' + s.stop_loss : '-') + '</span></div>' + (isExited ? '<div class="position-row total"><span>Exit Price:</span><span>$' + s.exit_price + '</span></div><div class="position-row total"><span>P&L:</span><span class="' + pnlClass + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%</span></div>' : '') + '</div>';
   }
   
-  return '<div class="card ' + (isEntered ? 'entered' : '') + '"><div class="card-header"><div class="ticker-section"><div><div class="ticker">' + s.ticker + '</div><div class="company-name">' + s.name + '</div><div style="margin-top:8px"><span class="sector-badge">' + (s.sector || 'Unknown') + '</span></div></div></div><div class="composite-score"><div class="score-value">' + (s.composite_score || 0) + '</div><div class="score-label">Score</div></div></div><div class="card-body"><div class="metrics-grid"><div class="metric"><div class="metric-value">' + (s.price ? '$' + s.price : '-') + '</div><div class="metric-label">Price</div></div><div class="metric"><div class="metric-value" style="color:' + (s.rs_rating >= 90 ? '#22c55e' : s.rs_rating >= 80 ? '#fbbf24' : '#94a3b8') + '">' + (s.rs_rating || 0) + '</div><div class="metric-label">RS Rating</div></div><div class="metric"><div class="metric-value" style="color:' + (s.eps_rating >= 90 ? '#22c55e' : s.eps_rating >= 80 ? '#fbbf24' : '#94a3b8') + '">' + (s.eps_rating || 0) + '</div><div class="metric-label">EPS Rating</div></div></div><div class="score-breakdown"><div class="score-row"><span>IBD</span><div class="score-bar"><div class="score-fill" style="width:' + (s.ibd_score || 0) + '%"></div></div><span>' + (s.ibd_score || 0) + '</span></div><div class="score-row"><span>FMP</span><div class="score-bar"><div class="score-fill" style="width:' + (s.fmp_score || 0) + '%"></div></div><span>' + (s.fmp_score || 0) + '</span></div><div class="score-row"><span>Finviz</span><div class="score-bar"><div class="score-fill" style="width:' + (s.finviz_score || 0) + '%"></div></div><span>' + (s.finviz_score || 0) + '</span></div><div class="score-row"><span>Consensus</span><div class="score-bar"><div class="score-fill" style="width:' + (s.consensus_score || 0) + '%"></div></div><span>' + (s.consensus_score || 0) + '</span></div></div>' + positionSection + (s.notes ? '<div class="notes-section"><div class="notes-text">' + s.notes + '</div></div>' : '') + '</div><div class="card-actions">' + actions + '</div></div>';
+  return '<div class="card ' + (isEntered ? 'entered' : '') + '"><div class="card-header"><div class="ticker-section"><div><div class="ticker">' + s.ticker + ' ' + rankChangeHtml + '</div><div class="company-name">' + s.name + '</div><div style="margin-top:8px"><span class="sector-badge">' + (s.sector || 'Unknown') + '</span></div></div></div><div class="composite-score"><div class="score-value">' + (s.composite_score || 0) + '</div><div class="score-label">Score ' + scoreDeltaHtml + '</div></div></div><div class="card-body"><div class="metrics-grid"><div class="metric"><div class="metric-value">' + (s.price ? '$' + s.price : '-') + '</div><div class="metric-label">Price</div></div><div class="metric"><div class="metric-value" style="color:' + (s.rs_rating >= 90 ? '#22c55e' : s.rs_rating >= 80 ? '#fbbf24' : '#94a3b8') + '">' + (s.rs_rating || 0) + '</div><div class="metric-label">RS Rating</div></div><div class="metric"><div class="metric-value" style="color:' + (s.eps_rating >= 90 ? '#22c55e' : s.eps_rating >= 80 ? '#fbbf24' : '#94a3b8') + '">' + (s.eps_rating || 0) + '</div><div class="metric-label">EPS Rating</div></div></div><div class="score-breakdown"><div class="score-row"><span>IBD</span><div class="score-bar"><div class="score-fill" style="width:' + (s.ibd_score || 0) + '%"></div></div><span>' + (s.ibd_score || 0) + '</span></div><div class="score-row"><span>FMP</span><div class="score-bar"><div class="score-fill" style="width:' + (s.fmp_score || 0) + '%"></div></div><span>' + (s.fmp_score || 0) + '</span></div><div class="score-row"><span>Finviz</span><div class="score-bar"><div class="score-fill" style="width:' + (s.finviz_score || 0) + '%"></div></div><span>' + (s.finviz_score || 0) + '</span></div><div class="score-row"><span>Consensus</span><div class="score-bar"><div class="score-fill" style="width:' + (s.consensus_score || 0) + '%"></div></div><span>' + (s.consensus_score || 0) + '</span></div></div>' + positionSection + (s.notes ? '<div class="notes-section"><div class="notes-text">' + s.notes + '</div></div>' : '') + '</div><div class="card-actions">' + actions + '</div></div>';
 }
 
 async function updateStatus(id, status) {
@@ -494,6 +616,37 @@ function toast(m) {
   setTimeout(() => t.remove(), 3000);
 }
 
+// Capture weekly snapshot for comparison
+async function captureSnapshot() {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Delete existing snapshot for today
+    await supabase.from('stock_snapshots').delete().eq('week_of', today);
+    
+    // Insert new snapshot
+    const snapshotData = stocks.map((s, idx) => ({
+      week_of: today,
+      stock_id: s.id,
+      ticker: s.ticker,
+      composite_score: s.composite_score,
+      fmp_score: s.fmp_score,
+      ibd_score: s.ibd_score,
+      finviz_score: s.finviz_score,
+      consensus_score: s.consensus_score,
+      rank: idx + 1
+    }));
+    
+    const { error } = await supabase.from('stock_snapshots').insert(snapshotData);
+    if (error) throw error;
+    
+    toast('Weekly snapshot captured');
+  } catch (err) {
+    console.error('Snapshot error:', err);
+    toast('Failed to capture snapshot');
+  }
+}
+
 function listeners() {
   document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -505,14 +658,25 @@ function listeners() {
       $('resultsCount').style.display = 'none';
       $('formulaView').style.display = 'block';
       document.querySelector('.controls').style.display = 'none';
+      $('insightsBar').style.display = 'none';
     } else {
       $('cardsGrid').style.display = 'grid';
       $('resultsCount').style.display = 'block';
       $('formulaView').style.display = 'none';
       document.querySelector('.controls').style.display = 'flex';
+      if (lastWeekStocks.length && (tab === 'ranked' || tab === 'all')) {
+        $('insightsBar').style.display = 'flex';
+      }
       render();
     }
   });
+  
+  // Top 40 toggle
+  $('top40Toggle').onclick = () => {
+    top40Only = !top40Only;
+    $('top40Toggle').classList.toggle('active', top40Only);
+    render();
+  };
   
   $('searchInput').oninput = e => { search = e.target.value; render(); };
   
