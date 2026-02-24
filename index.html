@@ -124,6 +124,17 @@
     .top40-toggle{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--bg-secondary);border:1px solid var(--accent-gold);border-radius:var(--radius);cursor:pointer;transition:all .2s;color:var(--accent-gold);font-size:14px;font-weight:600}
     .top40-toggle:hover{background:var(--accent-gold-glow)}
     .top40-toggle.active{background:var(--accent-gold);color:var(--bg-primary)}
+    .export-btn{background:var(--accent-gold);color:var(--bg-primary);border:none;padding:10px 20px;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px}
+    .export-btn:hover{background:var(--accent-gold-light);transform:translateY(-2px)}
+    .export-modal{position:fixed;inset:0;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;z-index:3000;padding:20px}
+    .export-modal.active{display:flex}
+    .export-content{background:var(--bg-secondary);border:1px solid var(--accent-gold);border-radius:var(--radius-lg);max-width:700px;width:100%;max-height:80vh;display:flex;flex-direction:column}
+    .export-header{padding:20px 24px;border-bottom:1px solid var(--bg-tertiary);display:flex;justify-content:space-between;align-items:center}
+    .export-header h3{font-family:'Playfair Display',serif;font-size:20px;color:var(--accent-gold)}
+    .export-close{background:none;border:none;color:var(--text-muted);font-size:24px;cursor:pointer;padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center}
+    .export-close:hover{color:var(--text-primary)}
+    .export-body{padding:20px 24px;overflow-y:auto;flex:1}
+    .export-text{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;color:var(--text-secondary);white-space:pre-wrap;background:var(--bg-tertiary);padding:16px;border-radius:var(--radius)}
     .insights-bar{max-width:1400px;margin:0 auto 16px;padding:0 32px;display:flex;gap:16px;flex-wrap:wrap}
     .insight-item{background:var(--bg-secondary);border:1px solid var(--bg-tertiary);border-radius:var(--radius);padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:13px}
     .insight-label{color:var(--text-muted)}
@@ -179,6 +190,7 @@
   <div class="controls">
     <div class="search-box"><input type="text" id="searchInput" placeholder="Search ticker or company..."></div>
     <button class="top40-toggle" id="top40Toggle">⭐ Top 40 Only</button>
+    <button class="export-btn" id="exportBtn">📋 Export for Rance</button>
     <div class="filter-group">
       <select id="sectorFilter" class="filter-select">
         <option value="">Sector</option>
@@ -280,6 +292,22 @@
   </div>
 
   <div class="toast-container" id="toastContainer"></div>
+
+  <div class="export-modal" id="exportModal">
+    <div class="export-content">
+      <div class="export-header">
+        <h3>📋 Stock Pipeline Summary for Rance</h3>
+        <button class="export-close" onclick="closeExport()">×</button>
+      </div>
+      <div class="export-body">
+        <div class="export-text" id="exportText"></div>
+      </div>
+      <div class="card-actions" style="padding:16px 24px;border-top:1px solid var(--bg-tertiary)">
+        <button class="action-btn btn-enter" onclick="copyExport()">📋 Copy to Clipboard</button>
+        <button class="action-btn btn-rank" onclick="closeExport()">Close</button>
+      </div>
+    </div>
+  </div>
 
   <script>
 const SUPABASE_URL = 'https://slmdfgunkmvbqbzjfpdz.supabase.co';
@@ -648,6 +676,69 @@ async function captureSnapshot() {
   }
 }
 
+function generateExport() {
+  const top40 = stocks.slice(0, 40);
+  const watchlist = stocks.filter(s => s.status === 'watchlist');
+  const entered = stocks.filter(s => s.status === 'entered');
+  const exited = stocks.filter(s => s.status === 'exited');
+  
+  let text = 'MAINSAIL CAPITAL - STOCK PIPELINE SUMMARY\n';
+  text += 'Generated: ' + new Date().toLocaleDateString() + '\n';
+  text += '============================================\n\n';
+  
+  text += '📊 OVERVIEW\n';
+  text += 'Total Stocks: ' + stocks.length + '\n';
+  text += 'Avg Composite Score: ' + (stocks.reduce((a, s) => a + (s.composite_score || 0), 0) / stocks.length).toFixed(1) + '\n';
+  text += 'Watchlist: ' + watchlist.length + '\n';
+  text += 'Active Positions: ' + entered.length + '\n';
+  text += 'Exited: ' + exited.length + '\n\n';
+  
+  text += '🏆 TOP 40 RANKED STOCKS\n';
+  text += '----------------------------------------\n';
+  top40.forEach((s, i) => {
+    text += (i + 1) + '. ' + s.ticker + ' - ' + s.name + '\n';
+    text += '   Score: ' + (s.composite_score || 0) + ' | IBD: ' + (s.ibd_score || 0) + ' | FMP: ' + (s.fmp_score || 0) + '\n';
+    text += '   Sector: ' + (s.sector || 'N/A') + '\n\n';
+  });
+  
+  if (watchlist.length > 0) {
+    text += '👁️ WATCHLIST\n';
+    text += '----------------------------------------\n';
+    watchlist.forEach(s => {
+      text += '• ' + s.ticker + ' - Score: ' + (s.composite_score || 0) + '\n';
+    });
+    text += '\n';
+  }
+  
+  if (entered.length > 0) {
+    text += '💼 ACTIVE POSITIONS\n';
+    text += '----------------------------------------\n';
+    entered.forEach(s => {
+      text += '• ' + s.ticker + ' - Entry: $' + s.entry_price + ' | Target: $' + s.target_price + '\n';
+    });
+    text += '\n';
+  }
+  
+  return text;
+}
+
+function openExport() {
+  const text = generateExport();
+  $('exportText').textContent = text;
+  $('exportModal').classList.add('active');
+}
+
+function closeExport() {
+  $('exportModal').classList.remove('active');
+}
+
+function copyExport() {
+  const text = $('exportText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    toast('Copied to clipboard!');
+  });
+}
+
 function listeners() {
   document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -678,6 +769,9 @@ function listeners() {
     $('top40Toggle').classList.toggle('active', top40Only);
     render();
   };
+  
+  // Export button
+  $('exportBtn').onclick = openExport;
   
   $('searchInput').oninput = e => { search = e.target.value; render(); };
   
